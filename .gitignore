@@ -107,3 +107,9 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# experiments
+experiments/*
+
+# .sh script
+**.sh

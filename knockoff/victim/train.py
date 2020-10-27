@@ -5,9 +5,12 @@ Replace this with a more detailed description of what this file contains.
 import argparse
 import os.path as osp
 import os
+import sys
+sys.path.append('/mydata/model-extraction/knockoffnets')
 from datetime import datetime
 import json
 from collections import defaultdict as dd
+import knockoff.models.zoo as zoo
 
 import numpy as np
 

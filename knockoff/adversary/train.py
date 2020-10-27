@@ -2,6 +2,8 @@
 """This is a short description.
 Replace this with a more detailed description of what this file contains.
 """
+import sys
+sys.path.append('/mydata/EfficientThief')
 import argparse
 import json
 import os
