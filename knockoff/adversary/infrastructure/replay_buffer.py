@@ -1,4 +1,4 @@
-from cs285.infrastructure.utils import *
+from knockoff.adversary.infrastructure.utils import *
 
 
 class ReplayBuffer(object):
@@ -10,9 +10,9 @@ class ReplayBuffer(object):
         self.obs = None
         self.acs = None
         self.concatenated_rews = None
-        self.unconcatenated_rews = None
+        #self.unconcatenated_rews = None
         self.next_obs = None
-        self.terminals = None
+        #self.terminals = None
 
     def add_rollouts(self, paths, noised=False):
 
@@ -21,7 +21,8 @@ class ReplayBuffer(object):
             self.paths.append(path)
 
         # convert new rollouts into their component arrays, and append them onto our arrays
-        observations, actions, next_observations, terminals, concatenated_rews, unconcatenated_rews = convert_listofrollouts(paths)
+        #observations, actions, next_observations, terminals, concatenated_rews, unconcatenated_rews = convert_listofrollouts(paths)
+        observations, actions, next_observations, concatenated_rews = convert_listofrollouts(paths)
 
         if noised:
             observations = add_noise(observations)
@@ -31,9 +32,9 @@ class ReplayBuffer(object):
             self.obs = observations[-self.max_size:]
             self.acs = actions[-self.max_size:]
             self.next_obs = next_observations[-self.max_size:]
-            self.terminals = terminals[-self.max_size:]
-            self.concatenated_rews = concatenated_rews[-self.max_size:]
-            self.unconcatenated_rews = unconcatenated_rews[-self.max_size:]
+            #self.terminals = terminals[-self.max_size:]
+            #self.concatenated_rews = concatenated_rews[-self.max_size:]
+            #self.unconcatenated_rews = unconcatenated_rews[-self.max_size:]
         else:
             self.obs = np.concatenate([self.obs, observations])[-self.max_size:]
             self.acs = np.concatenate([self.acs, actions])[-self.max_size:]
@@ -73,7 +74,8 @@ class ReplayBuffer(object):
     def sample_recent_data(self, batch_size=1, concat_rew=True):
 
         if concat_rew:
-            return self.obs[-batch_size:], self.acs[-batch_size:], self.concatenated_rews[-batch_size:], self.next_obs[-batch_size:], self.terminals[-batch_size:]
+            #return self.obs[-batch_size:], self.acs[-batch_size:], self.concatenated_rews[-batch_size:], self.next_obs[-batch_size:], self.terminals[-batch_size:]
+            return self.obs[-batch_size:], self.acs[-batch_size:], self.concatenated_rews[-batch_size:], self.next_obs[-batch_size:]
         else:
             num_recent_rollouts_to_return = 0
             num_datapoints_so_far = 0

@@ -24,28 +24,23 @@ import knockoff.utils.utils as knockoff_utils
 from knockoff.victim.blackbox import Blackbox
 import knockoff.config as cfg
 
-from knockoff.adversary.agents import PGAgent
+from knockoff.adversary.agents.pg_agent import PGAgent
 
 
 class PGAdversary(object):
-    def __init__(self, queryset, batch_size, **agent_params):
+    def __init__(self, queryset, num_each_class, agent_params):
 
         # init vars
-        self.n_queryset = len(self.queryset)
-        assert batch_size % num_classes == 0, "batch_size should be divisible by num_classes"
-        self.num_each_class = batch_size // num_classes
-
         self.queryset = queryset
-        self.num_classes = ac_dim
+        #self.n_queryset = len(self.queryset)
+        #num_classes = len(queryset.classes)
+        #assert batch_size % num_classes == 0, "batch_size should be divisible by num_classes"
+        self.num_each_class = num_each_class
 
-        self.agent = PGAgent(
-            self.agent_params['ac_dim'],
-            self.agent_params['ob_dim'],
-            self.agent_params['n_layers'],
-            self.agent_params['size'],
-            discrete=self.agent_params['discrete'],
-            learning_rate=self.agent_params['learning_rate']
-            )
+        self.num_classes = len(queryset.classes)
+        self.agent_params = agent_params
+
+        self.agent = PGAgent(agent_params)
 
         self.idx_set = set()
 
@@ -60,8 +55,6 @@ class PGAdversary(object):
         self.transferset = []
 
     def init_sampling(self):
-        targets = queryset.targets
-
         X = []
         for i in range(self.num_classes):
             X.append(self._sample_from_class(i))
@@ -69,12 +62,13 @@ class PGAdversary(object):
         return torch.cat(X)
 
     def _sample_from_class(self, target):
-        labels = self.queryset.targets
-        idx = np.random.choice(range(labels.size(0)), size=self.num_each_class, replace=False)
+        labels = np.array(self.queryset.targets)
+        idx = np.random.choice(range(labels.size), size=self.num_each_class, replace=False)
         # TODO: Optimize by caching
-        sample_idx = (labels==target).nonzero()[idx]
-        subset = torch.utils.data.Subset(self.queryset, target_idx).samples
-        return torch.stack([sample[0] for sample in subset]) # [(img, label)]
+        target_idx = (labels==target).nonzero()[0]
+        sample_idx = np.random.choice(target_idx, size=self.num_each_class, replace=False)
+        subset = torch.utils.data.Subset(self.queryset, sample_idx)
+        return torch.stack([subset[i][0] for i in range(len(subset))]) # [(img, label)]
 
 
     def sample(self, observations):
@@ -87,8 +81,8 @@ class PGAdversary(object):
 
     def train_agent(self):
         for train_step in range(self.num_agent_train_steps_per_iter):
-            ob_batch, ac_batch, re_batch, next_ob_batch = self.agent.sample(self.train_batch_size)
-            self.agent.train(observations, actions)
+            ob_batch, ac_batch, re_batch, next_ob_batch = self.agent.sample_from_replay_buffer(self.train_batch_size)
+            self.agent.train(ob_batch, ac_batch, re_batch, next_ob_batch)
 
     def add_to_replay_buffer(path):
         self.agent.add_to_replay_buffer(path)

@@ -4,21 +4,22 @@ sys.path.append('/mydata/EfficientThief')
 import numpy as np
 
 from .base_agent import BaseAgent
-from knockoff.policies.MLP_policy import MLPPolicyPG
-from knockoff.infrastructure import utils
+from knockoff.adversary.policies.MLP_policy import MLPPolicyPG
+from knockoff.adversary.infrastructure import utils
+from knockoff.adversary.infrastructure.replay_buffer import ReplayBuffer
 import heapq
 
 class PGAgent(BaseAgent):
-    def __init__(self, env, agent_params):
+    def __init__(self, agent_params):
         super(PGAgent).__init__()
 
         # init vars
-        self.env = env
+        #self.env = env
         self.agent_params = agent_params
-        self.gamma = self.agent_params['gamma']
-        self.standardize_advantages = self.agent_params['standardize_advantages']
-        self.nn_baseline = self.agent_params['nn_baseline']
-        self.reward_to_go = self.agent_params['reward_to_go']
+        #self.gamma = self.agent_params['gamma']
+        #self.standardize_advantages = self.agent_params['standardize_advantages']
+        #self.nn_baseline = self.agent_params['nn_baseline']
+        #self.reward_to_go = self.agent_params['reward_to_go']
 
         # actor/policy
         self.actor = MLPPolicyPG(
@@ -28,7 +29,7 @@ class PGAgent(BaseAgent):
             self.agent_params['size'],
             discrete=self.agent_params['discrete'],
             learning_rate=self.agent_params['learning_rate'],
-            nn_baseline=self.agent_params['nn_baseline']
+            #nn_baseline=self.agent_params['nn_baseline']
         )
 
         # replay buffer
@@ -142,7 +143,7 @@ class PGAgent(BaseAgent):
     def add_to_replay_buffer(self, paths):
         self.replay_buffer.add_rollouts(paths)
 
-    def sample(self, batch_size):
+    def sample_from_replay_buffer(self, batch_size):
         return self.replay_buffer.sample_recent_data(batch_size, concat_rew=False)
 
     #####################################################

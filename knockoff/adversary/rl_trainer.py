@@ -107,7 +107,7 @@ def main():
     parser.add_argument('model_dir', metavar='DIR', type=str, help='Directory containing transferset.pickle')
     parser.add_argument('model_arch', metavar='MODEL_ARCH', type=str, help='Model name')
     parser.add_argument('testdataset', metavar='DS_NAME', type=str, help='Name of test')
-    parser.add_argument('--budget', metavar='B', type=int,
+    parser.add_argument('--budgets', metavar='B', type=int,
                         help='Knockoffs will be trained for budget.')
     # Optional arguments
     parser.add_argument('-d', '--device_id', metavar='D', type=int, help='Device id. -1 for CPU.', default=0)
@@ -130,6 +130,14 @@ def main():
     parser.add_argument('-w', '--num_workers', metavar='N', type=int, help='# Worker threads to load data', default=10)
     parser.add_argument('--pretrained', type=str, help='Use pretrained network', default=None)
     parser.add_argument('--weighted-loss', action='store_true', help='Use a weighted loss', default=False)
+
+    # RL arguments
+    parser.add_argument('--traj_length', metavar='N', type=int, help='# Step in one trajactory', default=10)
+    parser.add_argument('--num_each_class', metavar='N', type=int, help='# sample in each class', default=10)
+    parser.add_argument('--n_iter', metavar='N', type=int, help='# iterations of RL training', default=10)
+    parser.add_argument('--queryset', metavar='DS_NAME', type=str, help='Name of test')
+    parser.add_argument('--victim_model_dir', default=None, type=str, metavar='PATH',
+                        help='path to latest checkpoint (default: none)')
     # Attacker's defense
     parser.add_argument('--argmaxed', action='store_true', help='Only consider argmax labels', default=False)
     parser.add_argument('--optimizer_choice', type=str, help='Optimizer', default='sgdm', choices=('sgd', 'sgdm', 'adam', 'adagrad'))
@@ -156,8 +164,8 @@ def main():
         raise ValueError('Dataset not found. Valid arguments = {}'.format(valid_datasets))
     dataset = datasets.__dict__[dataset_name]
     testset = dataset(train=False, transform=transform)
-    if len(testset.classes) != num_classes:
-        raise ValueError('# Transfer classes ({}) != # Testset classes ({})'.format(num_classes, len(testset.classes)))
+    #if len(testset.classes) != num_classes:
+    #    raise ValueError('# Transfer classes ({}) != # Testset classes ({})'.format(num_classes, len(testset.classes)))
 
 
     # ----------- Set up queryset
@@ -168,6 +176,7 @@ def main():
     modelfamily = datasets.dataset_to_modelfamily[queryset_name]
     transform = datasets.modelfamily_to_transforms[modelfamily]['test']
     queryset = datasets.__dict__[queryset_name](train=True, transform=transform)
+    num_classes = len(queryset.classes)
 
     # ----------- Initialize blackbox
     blackbox_dir = params['victim_model_dir']
@@ -181,24 +190,25 @@ def main():
     adv_model = adv_model.to(device)
 
     # ----------- Initialize adversary
-
-    adversary = PGAdversary(blackbox, queryset)
-
-    iter = 0
-    rewards = None
+    num_each_class = params['num_each_class']
+    agent_params = {"ac_dim": num_classes,
+                    "ob_dim": len(testset.classes),
+                    "n_layers": 2,
+                    "size": 64,
+                    "discrete":True,
+                    "learning_rate":1e-3}
+    adversary = PGAdversary(queryset, num_each_class, agent_params)
 
     # ----------- Set up transferset
-    num_each_class = params['num_each_class']
-    X = adversary.init_sampling(num_each_class)
+    X = adversary.init_sampling()
 
     Y_prev = blackbox(X)
     print(f'=> Start with {num_classes}x{num_each_class}={X.size(0)} images')
 
-
     def collect_training_trajactories(length, num_each_class=10):
         obs, acs, rewards, next_obs = [], [], [], []
         X_path, Y_path = [], []
-        X = adversary.init_sampling(num_each_class)
+        X = adversary.init_sampling()
         X_path.append(X)
         ob = blackbox(X)
         Y_path.append(ob)
@@ -216,18 +226,21 @@ def main():
             Y_adv = model_adv(ob)
             reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
             rewards.append(reward)
-        path = {"obs":obs,
-                "acs":acs,
-                "rewards":rewards,
-                "next_obs":next_obs}
+        path = {"observation":obs,
+                "action":acs,
+                "reward":rewards,
+                "next_observation":next_obs}
         
         return X_path, Y_path, path
 
 
     traj_length = params['traj_length']
+    num_each_class = params['num_each_class']
+    n_iter = params['n_iter']
     X, Y = None, None
     criterion_train = model_utils.soft_cross_entropy
     for iter in range(n_iter):
+        # n_iter * traj_length = budget
         X_path, Y_path, path = collect_training_trajactories(traj_length, num_each_class=num_each_class)
 
         adversary.add_to_replay_buffer(path)
@@ -243,9 +256,9 @@ def main():
         transferset = ImageTensorSet((X, Y), transform=transform)
 
         # ----------- Train
-        np.random.seed(cfg.DEFAULT_SEED)
-        torch.manual_seed(cfg.DEFAULT_SEED)
-        torch.cuda.manual_seed(cfg.DEFAULT_SEED)
+        #np.random.seed(cfg.DEFAULT_SEED)
+        #torch.manual_seed(cfg.DEFAULT_SEED)
+        #torch.cuda.manual_seed(cfg.DEFAULT_SEED)
         optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
         #print(params)
         checkpoint_suffix = '.{}'.format(b)
