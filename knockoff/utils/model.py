@@ -143,7 +143,7 @@ def test_step(model, test_loader, criterion, device, epoch=0., silent=False):
 
 
 def train_model(model, trainset, out_path, batch_size=64, criterion_train=None, criterion_test=None, testset=None,
-                device=None, num_workers=10, lr=0.1, momentum=0.5, lr_step=30, lr_gamma=0.1, resume=None,
+                device=None, num_workers=10, lr=0.1, momentum=0.5, lr_step=30, lr_gamma=0.1, resume=None, benchmark=-1,
                 epochs=100, log_interval=100, weighted_loss=False, checkpoint_suffix='', optimizer=None, scheduler=None,
                 **kwargs):
     if device is None:
@@ -218,9 +218,10 @@ def train_model(model, trainset, out_path, batch_size=64, criterion_train=None, 
         if test_loader is not None:
             test_loss, test_acc = test_step(model, test_loader, criterion_test, device, epoch=epoch)
             best_test_acc = max(best_test_acc, test_acc)
+            benchmark = max(benchmark, test_acc)
 
         # Checkpoint
-        if test_acc >= best_test_acc:
+        if test_acc >= best_test_acc and test_acc >= benchmark:
             state = {
                 'epoch': epoch,
                 'arch': model.__class__,
@@ -238,4 +239,4 @@ def train_model(model, trainset, out_path, batch_size=64, criterion_train=None, 
             test_cols = [run_id, epoch, 'test', test_loss, test_acc, best_test_acc]
             af.write('\t'.join([str(c) for c in test_cols]) + '\n')
 
-    return model
+    return benchmark

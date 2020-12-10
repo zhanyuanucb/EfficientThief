@@ -202,7 +202,7 @@ def main():
     if queryset_name not in valid_datasets:
         raise ValueError('Dataset not found. Valid arguments = {}'.format(valid_datasets))
     modelfamily = datasets.dataset_to_modelfamily[queryset_name]
-    transform = datasets.modelfamily_to_transforms[modelfamily]['test']
+    transform = datasets.modelfamily_to_transforms[modelfamily]['train']
     queryset = datasets.__dict__[queryset_name](train=True, transform=transform)
     num_classes = len(queryset.classes)
 
@@ -221,7 +221,7 @@ def main():
     num_each_class = params['num_each_class']
     agent_params = {"ac_dim": num_classes,
                     "ob_dim": len(testset.classes),
-                    "n_layers": 2,
+                    "n_layers": 4,
                     "size": 64,
                     "discrete":True,
                     "learning_rate":1e-3,
@@ -231,7 +231,9 @@ def main():
 
     # ----------- Set up transferset
     def collect_training_trajectories(length, n_traj=10):
+        nonlocal avg_rewards
         paths = []
+        mean_rew = 0
         for _ in range(n_traj):
             obs, acs, rewards, next_obs = [], [], [], []
             X_path, Y_path = [], []
@@ -262,6 +264,7 @@ def main():
             obs = np.concatenate(obs)
             acs = np.concatenate(acs)
             rewards = np.concatenate(rewards)
+            mean_rew += np.mean(rewards)
             next_obs = np.concatenate(next_obs)
             path = {"observation":obs,
                     "action":acs,
@@ -269,6 +272,8 @@ def main():
                     "next_observation":next_obs}
             paths.append(path)
         
+        print(f"==> Avg reward: {mean_rew / n_traj}")
+        avg_rewards.append(mean_rew / n_traj)
         return torch.cat(X_path), torch.cat(Y_path), paths
 
 
@@ -282,8 +287,12 @@ def main():
         n_iter = budgets // traj_length
 
     print(f"==> Budget = {n_iter} x {traj_length}")
-    for iter in range(n_iter):
+    best_test_acc = []
+    best_acc = -1
+    avg_rewards = []
+    for iter in range(1, n_iter+1):
         # n_iter * traj_length = budget
+        print(f"==> Iteration: {iter}/{n_iter}")
         X_path, Y_path, paths = collect_training_trajectories(traj_length)
 
         adversary.add_to_replay_buffer(paths)
@@ -305,9 +314,14 @@ def main():
         optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
         print(f"Train on {len(transferset)} samples")
         checkpoint_suffix = '.{extraction}'
-        model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
-                                checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, **params)
+        best_acc = model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
+                                checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, benchmark=best_acc, **params)
+        best_test_acc.append(best_acc)
         adversary.agent.actor.save(osp.join(model_dir, "checkpoint.agent.state_dict"))
+
+        # ----------- Log
+        torch.save(best_acc, osp.join(model_dir, "best_acc.np"))
+        torch.save(avg_rewards, osp.join(model_dir, "avg_rewards.np"))
 
 
     # Store arguments
