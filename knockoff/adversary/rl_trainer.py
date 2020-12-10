@@ -18,6 +18,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torch import optim
 from torchvision.datasets.folder import ImageFolder, IMG_EXTENSIONS, default_loader
+import torch.nn.functional as F
 
 import knockoff.config as cfg
 import knockoff.utils.model as model_utils
@@ -226,8 +227,8 @@ def main():
                 Y_path.append(ob)
                 ob = ob.cpu().numpy()
                 next_obs.append(ob)
-                Y_adv = adv_model(X_new).cpu().numpy()
-            import ipdb; ipdb.set_trace()
+                Y_adv = adv_model(X_new)
+                Y_adv = F.softmax(Y_adv, dim=1).cpu().numpy()
             reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
             rewards.append(reward)
         path = {"observation":obs,
