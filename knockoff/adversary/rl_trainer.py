@@ -73,6 +73,30 @@ class TransferSetImages(Dataset):
     def __len__(self):
         return len(self.data)
 
+class ImageTensorSet(Dataset):
+    """
+    Data are saved as:
+    List[data:torch.Tensor(), labels:torch.Tensor()]
+    """
+    def __init__(self, samples, transform=None, dataset="cifar"):
+        self.data, self.targets = samples
+        self.transform = transform
+        self.mode = "RGB" if dataset != "mnist" else "L"
+
+    def __getitem__(self, index):
+        img, target = self.data[index], self.targets[index]
+        if self.transform is not None:
+            img *= 255
+            img = img.numpy().astype('uint8')
+            if self.mode == "RGB":
+                img = img.transpose([1, 2, 0])
+            img = Image.fromarray(img, mode=self.mode)
+            img = self.transform(img)
+
+        return img, target
+
+    def __len__(self):
+        return len(self.data)
 
 def samples_to_transferset(samples, budget=None, transform=None, target_transform=None):
     # Images are either stored as paths, or numpy arrays
@@ -114,8 +138,8 @@ def main():
     parser.add_argument('-d', '--device_id', metavar='D', type=int, help='Device id. -1 for CPU.', default=0)
     parser.add_argument('-b', '--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
-    parser.add_argument('-e', '--epochs', type=int, default=100, metavar='N',
-                        help='number of epochs to train (default: 100)')
+    parser.add_argument('-e', '--epochs', type=int, default=10, metavar='N',
+                        help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.01)')
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
@@ -197,46 +221,52 @@ def main():
                     "n_layers": 2,
                     "size": 64,
                     "discrete":True,
-                    "learning_rate":1e-3}
+                    "learning_rate":1e-3,
+                    "num_agent_train_steps_per_iter":1,
+                    "agent_train_batch_size":10}
     adversary = PGAdversary(queryset, num_each_class, agent_params)
 
     # ----------- Set up transferset
-    X = adversary.init_sampling()
+    def collect_training_trajectories(length, n_traj=10):
+        paths = []
+        for _ in range(n_traj):
+            obs, acs, rewards, next_obs = [], [], [], []
+            X_path, Y_path = [], []
+            X, actions = adversary.init_sampling()
+            X_path.append(X)
+            ob = blackbox(X)
+            Y_path.append(ob)
+            ob = ob.numpy()
 
-    Y_prev = blackbox(X)
-    print(f'=> Start with {num_classes}x{num_each_class}={X.size(0)} images')
+            for t in range(length-1):
+                with torch.no_grad():
+                    # Observe and react
+                    obs.append(ob)
+                    X_new, actions = adversary.sample(ob)
+                    X_path.append(X_new)
+                    acs.append(actions)
 
-    def collect_training_trajactories(length):
-        obs, acs, rewards, next_obs = [], [], [], []
-        X_path, Y_path = [], []
-        X = adversary.init_sampling()
-        X_path.append(X)
-        ob = blackbox(X)
-        ob = ob.numpy()
-        Y_path.append(ob)
-
-        for t in range(length-1):
-            with torch.no_grad():
-                X_new, actions = adversary.sample(ob)
-                X_new = X_new.to(device)
-                X_path.append(X_new)
-                obs.append(ob)
-                acs.append(actions)
-
-                ob = blackbox(X_new)
-                Y_path.append(ob)
-                ob = ob.cpu().numpy()
-                next_obs.append(ob)
-                Y_adv = adv_model(X_new)
-                Y_adv = F.softmax(Y_adv, dim=1).cpu().numpy()
-            reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
-            rewards.append(reward)
-        path = {"observation":obs,
-                "action":acs,
-                "reward":rewards,
-                "next_observation":next_obs}
+                    # Env gives feedback, which is a new observation
+                    X_new = X_new.to(device)
+                    ob = blackbox(X_new)
+                    Y_path.append(ob)
+                    ob = ob.cpu().numpy()
+                    next_obs.append(ob)
+                    Y_adv = adv_model(X_new)
+                    Y_adv = F.softmax(Y_adv, dim=1).cpu().numpy()
+                reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
+                rewards.append(reward)
+            obs = np.concatenate(obs)
+            acs = np.concatenate(acs)
+            rewards = np.concatenate(rewards)
+            next_obs = np.concatenate(next_obs)
+            path = {"observation":obs,
+                    "action":acs,
+                    "reward":rewards,
+                    "next_observation":next_obs}
+            paths.append(path)
         
-        return X_path, Y_path, path
+        return torch.cat(X_path), torch.cat(Y_path), paths
 
 
     traj_length = params['traj_length']
@@ -246,17 +276,17 @@ def main():
     criterion_train = model_utils.soft_cross_entropy
     for iter in range(n_iter):
         # n_iter * traj_length = budget
-        X_path, Y_path, path = collect_training_trajactories(traj_length)
+        X_path, Y_path, paths = collect_training_trajectories(traj_length)
 
-        adversary.add_to_replay_buffer(path)
+        adversary.add_to_replay_buffer(paths)
 
         adversary.train_agent()
 
         if X is None:
             X, Y = X_path, Y_path
         else:
-            X = torch.cat(X, X_path)
-            Y = torch.cat(Y, Y_path)
+            X = torch.cat((X, X_path))
+            Y = torch.cat((Y, Y_path))
 
         transferset = ImageTensorSet((X, Y), transform=transform)
 
@@ -265,8 +295,8 @@ def main():
         #torch.manual_seed(cfg.DEFAULT_SEED)
         #torch.cuda.manual_seed(cfg.DEFAULT_SEED)
         optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
-        #print(params)
-        checkpoint_suffix = '.{}'.format(b)
+        print(f"Train on {len(transferset)} samples")
+        checkpoint_suffix = '.{}'.format(iter)
         model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
                                 checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, **params)
 

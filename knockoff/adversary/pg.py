@@ -5,6 +5,7 @@ Replace this with a more detailed description of what this file contains.
 import argparse
 import os.path as osp
 import os
+import random
 
 import numpy as np
 
@@ -38,6 +39,8 @@ class PGAdversary(object):
         self.num_each_class = num_each_class
 
         self.num_classes = len(queryset.classes)
+        self.num_agent_train_steps_per_iter = agent_params["num_agent_train_steps_per_iter"]
+        self.train_batch_size = agent_params['agent_train_batch_size']
         self.agent_params = agent_params
 
         self.agent = PGAgent(agent_params)
@@ -55,11 +58,13 @@ class PGAdversary(object):
         self.transferset = []
 
     def init_sampling(self):
-        X = []
-        for i in range(self.num_classes):
-            X.append(self._sample_from_class(i))
+#        X = []
+#        for i in range(self.num_classes):
+#            X.append(self._sample_from_class(i))
 
-        return torch.cat(X)
+        sample_target = random.randint(0, self.num_classes-1)
+        actions = np.array([sample_target])
+        return self._sample_from_class(sample_target), actions
 
     def _sample_from_class(self, target):
         labels = np.array(self.queryset.targets)
@@ -80,8 +85,7 @@ class PGAdversary(object):
 
     def train_agent(self):
         for train_step in range(self.num_agent_train_steps_per_iter):
-            ob_batch, ac_batch, re_batch, next_ob_batch = self.agent.sample_from_replay_buffer(self.train_batch_size)
+            ob_batch, ac_batch, next_ob_batch, re_batch = self.agent.sample_from_replay_buffer(self.train_batch_size)
             self.agent.train(ob_batch, ac_batch, re_batch, next_ob_batch)
-
-    def add_to_replay_buffer(path):
-        self.agent.add_to_replay_buffer(path)
+    def add_to_replay_buffer(self, paths):
+        self.agent.add_to_replay_buffer(paths)

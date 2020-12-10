@@ -134,9 +134,9 @@ class MLPPolicyPG(MLPPolicy):
         self.baseline_loss = nn.MSELoss()
 
     def update(self, observations, actions, advantages, q_values=None):
-        #observations = ptu.from_numpy(observations)
-        #actions = ptu.from_numpy(actions)
-        #advantages = ptu.from_numpy(advantages)
+        observations = ptu.from_numpy(observations)
+        actions = ptu.from_numpy(actions)
+        advantages = ptu.from_numpy(advantages)
 
         # TODO: compute the loss that should be optimized when training with policy gradient
         # HINT1: Recall that the expression that we want to MAXIMIZE
