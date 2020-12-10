@@ -27,6 +27,7 @@ import knockoff.models.zoo as zoo
 from knockoff.victim.blackbox import Blackbox
 
 from knockoff.adversary.pg import PGAdversary
+import knockoff.adversary.infrastructure.pytorch_util as ptu
 
 __author__ = "Tribhuvanesh Orekondy"
 __maintainer__ = "Tribhuvanesh Orekondy"
@@ -175,9 +176,11 @@ def main():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+
+    ptu.init_gpu(gpu_id=params['device_id'])
+
     model_dir = params['model_dir']
 
-    budgets = params['budgets']
 
 
     # ----------- Set up testset
@@ -211,7 +214,7 @@ def main():
     model_name = params['model_arch']
     pretrained = params['pretrained']
     # model = model_utils.get_net(model_name, n_output_classes=num_classes, pretrained=pretrained)
-    adv_model = zoo.get_net(model_name, modelfamily, pretrained, num_classes=num_classes)
+    adv_model = zoo.get_net(model_name, modelfamily, pretrained, num_classes=10)
     adv_model = adv_model.to(device)
 
     # ----------- Initialize adversary
@@ -273,7 +276,12 @@ def main():
     num_each_class = params['num_each_class']
     n_iter = params['n_iter']
     X, Y = None, None
+    budgets = params['budgets']
     criterion_train = model_utils.soft_cross_entropy
+    if traj_length > 0:
+        n_iter = budgets // traj_length
+
+    print(f"==> Budget = {n_iter} x {traj_length}")
     for iter in range(n_iter):
         # n_iter * traj_length = budget
         X_path, Y_path, paths = collect_training_trajectories(traj_length)
@@ -296,9 +304,10 @@ def main():
         #torch.cuda.manual_seed(cfg.DEFAULT_SEED)
         optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
         print(f"Train on {len(transferset)} samples")
-        checkpoint_suffix = '.{}'.format(iter)
+        checkpoint_suffix = '.{extraction}'
         model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
                                 checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, **params)
+        adversary.agent.actor.save(osp.join(model_dir, "checkpoint.agent.state_dict"))
 
 
     # Store arguments
@@ -306,6 +315,10 @@ def main():
     params_out_path = osp.join(model_dir, 'params_train.json')
     with open(params_out_path, 'w') as jf:
         json.dump(params, jf, indent=True)
+
+    agent_params_out_path = osp.join(model_dir, 'agent_params_train.json')
+    with open(agent_params_out_path, 'w') as jf:
+        json.dump(agent_params, jf, indent=True)
 
 
 if __name__ == '__main__':
