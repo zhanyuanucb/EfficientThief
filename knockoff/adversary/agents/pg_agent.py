@@ -186,5 +186,3 @@ class PGAgent(BaseAgent):
             present[n-i] = 0
             rewards += present*base
         return rewards
-
-

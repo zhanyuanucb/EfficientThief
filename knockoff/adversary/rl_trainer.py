@@ -133,7 +133,7 @@ def main():
 
     # RL arguments
     parser.add_argument('--traj_length', metavar='N', type=int, help='# Step in one trajactory', default=10)
-    parser.add_argument('--num_each_class', metavar='N', type=int, help='# sample in each class', default=10)
+    parser.add_argument('--num_each_class', metavar='N', type=int, help='# sample in each class', default=1)
     parser.add_argument('--n_iter', metavar='N', type=int, help='# iterations of RL training', default=10)
     parser.add_argument('--queryset', metavar='DS_NAME', type=str, help='Name of test')
     parser.add_argument('--victim_model_dir', default=None, type=str, metavar='PATH',
@@ -205,25 +205,27 @@ def main():
     Y_prev = blackbox(X)
     print(f'=> Start with {num_classes}x{num_each_class}={X.size(0)} images')
 
-    def collect_training_trajactories(length, num_each_class=10):
+    def collect_training_trajactories(length):
         obs, acs, rewards, next_obs = [], [], [], []
         X_path, Y_path = [], []
         X = adversary.init_sampling()
         X_path.append(X)
         ob = blackbox(X)
+        ob = ob.numpy()
         Y_path.append(ob)
 
         for t in range(length-1):
             with torch.no_grad():
                 X_new, actions = adversary.sample(ob)
-            X_path.append(X_new)
-            obs.append(ob)
-            acs.append(actions)
+                X_new = X_new.to(device)
+                X_path.append(X_new)
+                obs.append(ob)
+                acs.append(actions)
 
-            ob = blackbox(X_new)
-            Y_path.append(ob)
-            next_obs.append(ob)
-            Y_adv = model_adv(ob)
+                ob = blackbox(X_new)
+                Y_path.append(ob)
+                next_obs.append(ob)
+                Y_adv = adv_model(X_new)
             reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
             rewards.append(reward)
         path = {"observation":obs,
@@ -241,7 +243,7 @@ def main():
     criterion_train = model_utils.soft_cross_entropy
     for iter in range(n_iter):
         # n_iter * traj_length = budget
-        X_path, Y_path, path = collect_training_trajactories(traj_length, num_each_class=num_each_class)
+        X_path, Y_path, path = collect_training_trajactories(traj_length)
 
         adversary.add_to_replay_buffer(path)
 

@@ -73,9 +73,8 @@ class PGAdversary(object):
 
     def sample(self, observations):
         actions = self.agent.take_action(observations)
-        sample_from = actions.argmax()
         X = []
-        for target in sample_from:
+        for target in actions:
             X.append(self._sample_from_class(target))
         return torch.cat(X), actions
 
