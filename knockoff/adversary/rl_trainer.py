@@ -24,7 +24,7 @@ from knockoff import datasets
 import knockoff.models.zoo as zoo
 from knockoff.victim.blackbox import Blackbox
 
-from knockoff.adversary.agents.pg_agent import PGAgent
+from knockoff.adversary.pg import PGAdversary
 
 __author__ = "Tribhuvanesh Orekondy"
 __maintainer__ = "Tribhuvanesh Orekondy"
@@ -193,25 +193,40 @@ def main():
     Y_prev = blackbox(X)
     print(f'=> Start with {num_classes}x{num_each_class}={X.size(0)} images')
 
-    rount = 0
-    while blackbox.call_count < budget:
-        X_new = adversary.sample(Y_prev)
-        Y_new = blackbox(X_new)
-        X = torch.cat(X, X_new)[:budget]
-        Y = torch.cat(Y, Y_new)[:budget]
-        transferset = ImageTensorSet((X, Y), transform=transform)
-        adversary.train_agent(y_new)
 
-        # ----------- Train
-        np.random.seed(cfg.DEFAULT_SEED)
-        torch.manual_seed(cfg.DEFAULT_SEED)
-        torch.cuda.manual_seed(cfg.DEFAULT_SEED)
-        optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
-        #print(params)
-        checkpoint_suffix = '.{}'.format(b)
-        criterion_train = model_utils.soft_cross_entropy
-        model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
-                                checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, **params)
+    def collect_training_trajactories(length):
+        obs, acs, rewards, next_obs = [], [], [], []
+        for t in range(length):
+
+
+
+
+    traj_length = params['traj_length']
+    for iter in range(n_iter):
+        training_returns = collect_training_trajactories(traj_length)
+
+        adversary.add_to_replay_buffer()
+
+        adversary.train_agent()
+
+        while blackbox.call_count < budget:
+            X_new, actions = adversary.sample(Y_prev)
+            Y_new = blackbox(X_new)
+            X = torch.cat(X, X_new)[:budget]
+            Y = torch.cat(Y, Y_new)[:budget]
+            transferset = ImageTensorSet((X, Y), transform=transform)
+            adversary.train_agent(Y_new, actions)
+
+            # ----------- Train
+            np.random.seed(cfg.DEFAULT_SEED)
+            torch.manual_seed(cfg.DEFAULT_SEED)
+            torch.cuda.manual_seed(cfg.DEFAULT_SEED)
+            optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
+            #print(params)
+            checkpoint_suffix = '.{}'.format(b)
+            criterion_train = model_utils.soft_cross_entropy
+            model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
+                                    checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, **params)
 
 
     # Store arguments

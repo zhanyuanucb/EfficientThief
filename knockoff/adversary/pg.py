@@ -24,6 +24,8 @@ import knockoff.utils.utils as knockoff_utils
 from knockoff.victim.blackbox import Blackbox
 import knockoff.config as cfg
 
+from knockoff.adversary.agents import PGAgent
+
 
 class PGAdversary(object):
     def __init__(self, queryset, batch_size, **agent_params):
@@ -36,8 +38,7 @@ class PGAdversary(object):
         self.queryset = queryset
         self.num_classes = ac_dim
 
-        # actor/policy
-        self.actor = MLPPolicyPG(
+        self.agent = PGAgent(
             self.agent_params['ac_dim'],
             self.agent_params['ob_dim'],
             self.agent_params['n_layers'],
@@ -77,19 +78,12 @@ class PGAdversary(object):
 
 
     def sample(self, observations):
-        """
-        victim: cat dog
-        obs: [0.1, 0.9]
-
-        adversay: human, cat, dog, car
-        actions = 2
-        """
-        actions = self.actor.get_action(observations)
+        actions = self.agent.take_action(observations)
+        sample_from = actions.argmax()
         X = []
-        for target in actions:
+        for target in sample_from:
             X.append(self._sample_from_class(target))
-        return torch.cat(X)
+        return torch.cat(X), actions
 
-    def train_agent(self, actions, observations):
-        rewards = self.actor.calculate_reward(observations)
-        self.actor.update(actions, observations, rewards)
+    def train_agent(self, observations, actions):
+        self.agent.train(observations, actions)

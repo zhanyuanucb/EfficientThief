@@ -33,7 +33,7 @@ class PGAgent(BaseAgent):
         # replay buffer
         self.replay_buffer = ReplayBuffer(1000000)
 
-    def train(self, observations, actions, rewards_list, next_observations, terminals):
+    def train(self, observations, actions):
 
         """
             Training a PG agent refers to updating its actor using the given observations/actions
@@ -41,16 +41,32 @@ class PGAgent(BaseAgent):
         """
 
         # step 1: calculate q values of each (s_t, a_t) point, using rewards (r_0, ..., r_t, ..., r_T)
-        q_values = self.calculate_q_vals(rewards_list)
+        #q_values = self.calculate_q_vals(rewards_list)
+        q_values = None
 
         # step 2: calculate advantages that correspond to each (s_t, a_t) point
-        advantages = self.estimate_advantage(observations, q_values)
+        #advantages = self.estimate_advantage(observations, q_values)
+        advantages = self.calculate_reward(observations, actions)
 
         # TODO: step 3: use all datapoints (s_t, a_t, q_t, adv_t) to update the PG actor/policy
         ## HINT: `train_log` should be returned by your actor update method
+        #train_log = self.actor.update(observations, actions, advantages, q_values)
         train_log = self.actor.update(observations, actions, advantages, q_values)
 
-        return train_log
+        #return train_log
+
+    def calculate_reward(self, observations, actions):
+        # Certainty
+        r_cert = c_cert*(observations)
+
+        # Diversity
+        r_div = c_div*()
+
+        # High CE Loss
+        return rewards
+
+    def take_action(self, obs):
+        return self.actor.get_action(obs)
 
     def calculate_q_vals(self, rewards_list):
 
