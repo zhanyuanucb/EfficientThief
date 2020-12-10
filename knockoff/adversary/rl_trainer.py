@@ -187,46 +187,69 @@ def main():
     rewards = None
 
     # ----------- Set up transferset
-    num_each_class = 10
+    num_each_class = params['num_each_class']
     X = adversary.init_sampling(num_each_class)
 
     Y_prev = blackbox(X)
     print(f'=> Start with {num_classes}x{num_each_class}={X.size(0)} images')
 
 
-    def collect_training_trajactories(length):
+    def collect_training_trajactories(length, num_each_class=10):
         obs, acs, rewards, next_obs = [], [], [], []
-        for t in range(length):
+        X_path, Y_path = [], []
+        X = adversary.init_sampling(num_each_class)
+        X_path.append(X)
+        ob = blackbox(X)
+        Y_path.append(ob)
 
+        for t in range(length-1):
+            with torch.no_grad():
+                X_new, actions = adversary.sample(ob)
+            X_path.append(X_new)
+            obs.append(ob)
+            acs.append(actions)
 
+            ob = blackbox(X_new)
+            Y_path.append(ob)
+            next_obs.append(ob)
+            Y_adv = model_adv(ob)
+            reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
+            rewards.append(reward)
+        path = {"obs":obs,
+                "acs":acs,
+                "rewards":rewards,
+                "next_obs":next_obs}
+        
+        return X_path, Y_path, path
 
 
     traj_length = params['traj_length']
+    X, Y = None, None
+    criterion_train = model_utils.soft_cross_entropy
     for iter in range(n_iter):
-        training_returns = collect_training_trajactories(traj_length)
+        X_path, Y_path, path = collect_training_trajactories(traj_length, num_each_class=num_each_class)
 
-        adversary.add_to_replay_buffer()
+        adversary.add_to_replay_buffer(path)
 
         adversary.train_agent()
 
-        while blackbox.call_count < budget:
-            X_new, actions = adversary.sample(Y_prev)
-            Y_new = blackbox(X_new)
-            X = torch.cat(X, X_new)[:budget]
-            Y = torch.cat(Y, Y_new)[:budget]
-            transferset = ImageTensorSet((X, Y), transform=transform)
-            adversary.train_agent(Y_new, actions)
+        if X is None:
+            X, Y = X_path, Y_path
+        else:
+            X = torch.cat(X, X_path)
+            Y = torch.cat(Y, Y_path)
 
-            # ----------- Train
-            np.random.seed(cfg.DEFAULT_SEED)
-            torch.manual_seed(cfg.DEFAULT_SEED)
-            torch.cuda.manual_seed(cfg.DEFAULT_SEED)
-            optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
-            #print(params)
-            checkpoint_suffix = '.{}'.format(b)
-            criterion_train = model_utils.soft_cross_entropy
-            model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
-                                    checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, **params)
+        transferset = ImageTensorSet((X, Y), transform=transform)
+
+        # ----------- Train
+        np.random.seed(cfg.DEFAULT_SEED)
+        torch.manual_seed(cfg.DEFAULT_SEED)
+        torch.cuda.manual_seed(cfg.DEFAULT_SEED)
+        optimizer = get_optimizer(adv_model.parameters(), params['optimizer_choice'], **params)
+        #print(params)
+        checkpoint_suffix = '.{}'.format(b)
+        model_utils.train_model(adv_model, transferset, model_dir, testset=testset, criterion_train=criterion_train,
+                                checkpoint_suffix=checkpoint_suffix, device=device, optimizer=optimizer, **params)
 
 
     # Store arguments

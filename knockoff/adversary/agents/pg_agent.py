@@ -33,7 +33,7 @@ class PGAgent(BaseAgent):
         # replay buffer
         self.replay_buffer = ReplayBuffer(1000000)
 
-    def train(self, observations, actions):
+    def train(self, observations, actions, rewards, next_observations):
 
         """
             Training a PG agent refers to updating its actor using the given observations/actions

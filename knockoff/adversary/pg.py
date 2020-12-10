@@ -85,5 +85,10 @@ class PGAdversary(object):
             X.append(self._sample_from_class(target))
         return torch.cat(X), actions
 
-    def train_agent(self, observations, actions):
-        self.agent.train(observations, actions)
+    def train_agent(self):
+        for train_step in range(self.num_agent_train_steps_per_iter):
+            ob_batch, ac_batch, re_batch, next_ob_batch = self.agent.sample(self.train_batch_size)
+            self.agent.train(observations, actions)
+
+    def add_to_replay_buffer(path):
+        self.agent.add_to_replay_buffer(path)
