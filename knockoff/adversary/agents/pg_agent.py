@@ -73,7 +73,9 @@ class PGAgent(BaseAgent):
         # r_div = c_div*()
 
         # High CE Loss
-        r_L = c_L*(np.sum(- observations[:] * np.log(Y_adv[:]), axis=1))
+        EPS = 1e-9
+        Y_adv = np.clip(Y_adv, EPS, 1-EPS)
+        r_L = c_L*(-np.sum(observations * np.log(Y_adv), axis=1))
 
         rewards = r_cert + r_L
         return rewards
