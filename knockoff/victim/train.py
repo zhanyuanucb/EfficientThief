@@ -6,7 +6,8 @@ import argparse
 import os.path as osp
 import os
 import sys
-sys.path.append('/mydata/model-extraction/knockoffnets')
+# sys.path.append('/mydata/model-extraction/knockoffnets')
+sys.path.append('/Users/luyu/cs285_proj/EfficientThief/')
 from datetime import datetime
 import json
 from collections import defaultdict as dd

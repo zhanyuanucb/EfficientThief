@@ -3,7 +3,7 @@
 Replace this with a more detailed description of what this file contains.
 """
 import sys
-sys.path.append('/mydata/EfficientThief')
+sys.path.append('/Users/luyu/cs285_proj/EfficientThief/')
 import argparse
 import json
 import os

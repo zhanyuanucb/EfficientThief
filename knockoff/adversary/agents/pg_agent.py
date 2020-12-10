@@ -6,6 +6,7 @@ import numpy as np
 from .base_agent import BaseAgent
 from knockoff.policies.MLP_policy import MLPPolicyPG
 from knockoff.infrastructure import utils
+import heapq
 
 class PGAgent(BaseAgent):
     def __init__(self, env, agent_params):
@@ -55,15 +56,26 @@ class PGAgent(BaseAgent):
 
         #return train_log
 
-    def calculate_reward(self, observations, actions):
+    def calculate_reward(self, observations, actions, Y_adv):
+        c_cert = 0.2
+        # c_div = 0.4
+        c_L = 1 - c_cert
+        # delta =
+
+        # observation is the prediction of the blackbox
+        obs = np.sort(observations, axis=1)
         # Certainty
-        r_cert = c_cert*(observations)
+        r_cert = c_cert*((obs.T[-1]- obs.T[-2]).T)
 
         # Diversity
-        r_div = c_div*()
+        # r_div = c_div*()
 
         # High CE Loss
+        r_L = c_L*(np.sum(- observations[:] * np.log(Y_adv[:]), axis=1))
+
+        rewards = r_cert + r_L
         return rewards
+    #vector, trajectory
 
     def take_action(self, obs):
         return self.actor.get_action(obs)
