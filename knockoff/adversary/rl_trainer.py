@@ -224,8 +224,10 @@ def main():
 
                 ob = blackbox(X_new)
                 Y_path.append(ob)
+                ob = ob.cpu().numpy()
                 next_obs.append(ob)
-                Y_adv = adv_model(X_new)
+                Y_adv = adv_model(X_new).cpu().numpy()
+            import ipdb; ipdb.set_trace()
             reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
             rewards.append(reward)
         path = {"observation":obs,
