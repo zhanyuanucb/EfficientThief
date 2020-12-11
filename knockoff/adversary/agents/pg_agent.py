@@ -62,19 +62,20 @@ class PGAgent(BaseAgent):
 
     def calculate_reward(self, observations, actions, Y_adv):
         c_cert = 0.2
-        # c_div = 0.4
+        c_div = 0.2
         c_explore = 0.3
-        c_L = 1 - c_cert - c_explore
+
+        c_L = 1 - c_cert - c_explore - c_div
         # delta =
 
 
         # observation is the prediction of the blackbox
         obs = np.sort(observations, axis=1)
         # Certainty
-        r_cert = c_cert*((obs.T[-1]- obs.T[-2]).T)
+        r_cert = c_cert * ((obs.T[-1]- obs.T[-2]).T)
 
         # Diversity
-        # r_div = c_div*()
+        r_div = c_div * (1 / len(Counter(actions).keys()))
 
         # High CE Loss
         EPS = 1e-9
@@ -85,7 +86,7 @@ class PGAgent(BaseAgent):
         self.visited_class.update(Counter(actions).keys())
         r_E = c_explore * (1 / len(self.visited_class))
 
-        rewards = r_cert + r_L + r_E
+        rewards = r_cert + r_L + r_E + r_div
         return rewards
     #vector, trajectory
 
