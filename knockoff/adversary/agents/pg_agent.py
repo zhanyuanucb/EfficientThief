@@ -8,6 +8,7 @@ from knockoff.adversary.policies.MLP_policy import MLPPolicyPG
 from knockoff.adversary.infrastructure import utils
 from knockoff.adversary.infrastructure.replay_buffer import ReplayBuffer
 import heapq
+from collections import Counter
 
 class PGAgent(BaseAgent):
     def __init__(self, agent_params):
@@ -34,6 +35,7 @@ class PGAgent(BaseAgent):
 
         # replay buffer
         self.replay_buffer = ReplayBuffer(1000000)
+        self.visited_class = []
 
     def train(self, observations, actions, rewards, next_observations):
 
@@ -61,8 +63,10 @@ class PGAgent(BaseAgent):
     def calculate_reward(self, observations, actions, Y_adv):
         c_cert = 0.2
         # c_div = 0.4
-        c_L = 1 - c_cert
+        c_explore = 0.3
+        c_L = 1 - c_cert - c_explore
         # delta =
+
 
         # observation is the prediction of the blackbox
         obs = np.sort(observations, axis=1)
@@ -77,7 +81,11 @@ class PGAgent(BaseAgent):
         Y_adv = np.clip(Y_adv, EPS, 1-EPS)
         r_L = c_L*(-np.sum(observations * np.log(Y_adv), axis=1))
 
-        rewards = r_cert + r_L
+        # Exploration Loss
+        self.visited_class += Counter(actions).keys()
+        r_E = c_explore * (1 / len(self.visited_class))
+
+        rewards = r_cert + r_L + r_E
         return rewards
     #vector, trajectory
 
