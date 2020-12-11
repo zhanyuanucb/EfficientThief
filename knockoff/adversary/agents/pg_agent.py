@@ -17,10 +17,10 @@ class PGAgent(BaseAgent):
         # init vars
         #self.env = env
         self.agent_params = agent_params
-        #self.gamma = self.agent_params['gamma']
-        #self.standardize_advantages = self.agent_params['standardize_advantages']
-        #self.nn_baseline = self.agent_params['nn_baseline']
-        #self.reward_to_go = self.agent_params['reward_to_go']
+        self.gamma = self.agent_params['gamma']
+        self.standardize_advantages = self.agent_params['standardize_advantages']
+        self.nn_baseline = self.agent_params['nn_baseline']
+        self.reward_to_go = self.agent_params['reward_to_go']
 
         # actor/policy
         self.actor = MLPPolicyPG(
@@ -30,14 +30,14 @@ class PGAgent(BaseAgent):
             self.agent_params['size'],
             discrete=self.agent_params['discrete'],
             learning_rate=self.agent_params['learning_rate'],
-            #nn_baseline=self.agent_params['nn_baseline']
+            nn_baseline=self.agent_params['nn_baseline']
         )
 
         # replay buffer
         self.replay_buffer = ReplayBuffer(1000000)
         self.visited_class = set()
 
-    def train(self, observations, actions, rewards, next_observations):
+    def train(self, observations, actions, next_observations, concatenated_rews, unconcatenated_rews):
 
         """
             Training a PG agent refers to updating its actor using the given observations/actions
@@ -45,13 +45,10 @@ class PGAgent(BaseAgent):
         """
 
         # step 1: calculate q values of each (s_t, a_t) point, using rewards (r_0, ..., r_t, ..., r_T)
-        #q_values = self.calculate_q_vals(rewards_list)
-        q_values = None
+        q_values = self.calculate_q_vals(unconcatenated_rews)
 
         # step 2: calculate advantages that correspond to each (s_t, a_t) point
-        #advantages = self.estimate_advantage(observations, q_values)
-        #advantages = self.calculate_reward(observations, actions)
-        advantages = rewards
+        advantages = self.estimate_advantage(observations, q_values)
 
         # TODO: step 3: use all datapoints (s_t, a_t, q_t, adv_t) to update the PG actor/policy
         ## HINT: `train_log` should be returned by your actor update method
@@ -75,7 +72,7 @@ class PGAgent(BaseAgent):
         r_cert = c_cert * ((obs.T[-1]- obs.T[-2]).T)
 
         # Diversity
-        r_div = c_div * (1 / len(Counter(actions).keys()))
+        r_div = c_div * (1 / len(set(actions)))
 
         # High CE Loss
         EPS = 1e-9
@@ -83,7 +80,7 @@ class PGAgent(BaseAgent):
         r_L = c_L*(-np.sum(observations * np.log(Y_adv), axis=1))
 
         # Exploration Loss
-        self.visited_class.update(Counter(actions).keys())
+        self.visited_class.update(set(actions))
         r_E = c_explore * (1 / len(self.visited_class))
 
         rewards = r_cert + r_L + r_E + r_div

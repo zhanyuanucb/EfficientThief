@@ -85,7 +85,9 @@ class PGAdversary(object):
 
     def train_agent(self):
         for train_step in range(self.num_agent_train_steps_per_iter):
-            ob_batch, ac_batch, next_ob_batch, re_batch = self.agent.sample_from_replay_buffer(self.train_batch_size)
-            self.agent.train(ob_batch, ac_batch, re_batch, next_ob_batch)
+            ob_batch, ac_batch, next_ob_batch, concatenated_rews, unconcatenated_rews = self.agent.sample_from_replay_buffer(self.train_batch_size)
+
+            self.agent.train(ob_batch, ac_batch, next_ob_batch, concatenated_rews, unconcatenated_rews)
+
     def add_to_replay_buffer(self, paths):
         self.agent.add_to_replay_buffer(paths)

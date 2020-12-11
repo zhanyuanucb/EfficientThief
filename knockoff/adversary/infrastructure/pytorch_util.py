@@ -22,7 +22,7 @@ def build_mlp(
         output_size: int,
         n_layers: int,
         size: int,
-        activation: Activation = 'tanh',
+        activation: Activation = 'relu',
         output_activation: Activation = 'identity',
 ):
     """

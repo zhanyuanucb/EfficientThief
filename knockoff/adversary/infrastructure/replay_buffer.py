@@ -22,7 +22,7 @@ class ReplayBuffer(object):
 
         # convert new rollouts into their component arrays, and append them onto our arrays
         #observations, actions, next_observations, terminals, concatenated_rews, unconcatenated_rews = convert_listofrollouts(paths)
-        observations, actions, next_observations, concatenated_rews = convert_listofrollouts(paths)
+        observations, actions, next_observations, concatenated_rews, unconcatenated_rews = convert_listofrollouts(paths)
 
         if noised:
             observations = add_noise(observations)
@@ -86,5 +86,6 @@ class ReplayBuffer(object):
                 num_datapoints_so_far += get_pathlength(recent_rollout)
             rollouts_to_return = self.paths[-num_recent_rollouts_to_return:]
             #observations, actions, next_observations, terminals, concatenated_rews, unconcatenated_rews = convert_listofrollouts(rollouts_to_return)
-            observations, actions, next_observations, concatenated_rews = convert_listofrollouts(rollouts_to_return)
-            return observations, actions, next_observations, concatenated_rews
+            observations, actions, next_observations, concatenated_rews, unconcatenated_rews = convert_listofrollouts(rollouts_to_return)
+            #observations, actions, next_observations, concatenated_rews = convert_listofrollouts(rollouts_to_return)
+            return observations, actions, next_observations, concatenated_rews, unconcatenated_rews

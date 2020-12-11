@@ -224,9 +224,14 @@ def main():
                     "n_layers": 4,
                     "size": 64,
                     "discrete":True,
-                    "learning_rate":1e-3,
+                    "learning_rate":1e-4,
                     "num_agent_train_steps_per_iter":1,
-                    "agent_train_batch_size":10}
+                    "agent_train_batch_size":10,
+                    "gamma":0.9,
+                    "reward_to_go":True,
+                    "nn_baseline":False,
+                    "standardize_advantages":True
+                    }
     adversary = PGAdversary(queryset, num_each_class, agent_params)
 
     # ----------- Set up transferset
@@ -259,7 +264,10 @@ def main():
                     next_obs.append(ob)
                     Y_adv = adv_model(X_new)
                     Y_adv = F.softmax(Y_adv, dim=1).cpu().numpy()
-                reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
+                #reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
+                reward = adversary.agent.calculate_reward(ob, 
+                                                          np.concatenate(acs), 
+                                                          Y_adv)
                 rewards.append(reward)
             obs = np.concatenate(obs)
             acs = np.concatenate(acs)
