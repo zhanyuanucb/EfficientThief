@@ -35,7 +35,7 @@ class PGAgent(BaseAgent):
 
         # replay buffer
         self.replay_buffer = ReplayBuffer(1000000)
-        self.visited_class = []
+        self.visited_class = set()
 
     def train(self, observations, actions, rewards, next_observations):
 
@@ -82,7 +82,7 @@ class PGAgent(BaseAgent):
         r_L = c_L*(-np.sum(observations * np.log(Y_adv), axis=1))
 
         # Exploration Loss
-        self.visited_class += Counter(actions).keys()
+        self.visited_class.update(Counter(actions).keys())
         r_E = c_explore * (1 / len(self.visited_class))
 
         rewards = r_cert + r_L + r_E
