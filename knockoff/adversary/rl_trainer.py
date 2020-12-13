@@ -7,6 +7,7 @@ import sys
 sys.path.append('/mydata/EfficientThief')
 import argparse
 import json
+import collections
 import os
 import os.path as osp
 import pickle
@@ -161,6 +162,7 @@ def main():
     parser.add_argument('--traj_length', metavar='N', type=int, help='# Step in one trajactory', default=10)
     parser.add_argument('--num_each_class', metavar='N', type=int, help='# sample in each class', default=1)
     parser.add_argument('--n_iter', metavar='N', type=int, help='# iterations of RL training', default=10)
+    parser.add_argument('--n_traj_each_iter', metavar='N', type=int, help='# trajactories / iter', default=10)
     parser.add_argument('--queryset', metavar='DS_NAME', type=str, help='Name of test')
     parser.add_argument('--victim_model_dir', default=None, type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
@@ -225,22 +227,26 @@ def main():
                     "size": 64,
                     "discrete":True,
                     "learning_rate":1e-4,
-                    "num_agent_train_steps_per_iter":1,
-                    "agent_train_batch_size":10,
+                    "num_agent_train_steps_per_iter":10,
+                    "agent_train_batch_size":990,
                     "gamma":0.9,
                     "reward_to_go":True,
                     "nn_baseline":False,
-                    "standardize_advantages":True
+                    "standardize_advantages":True,
+                    "eps_random":-1
                     }
     adversary = PGAdversary(queryset, num_each_class, agent_params)
 
     # ----------- Set up transferset
     def collect_training_trajectories(length, n_traj=10):
-        nonlocal avg_rewards
+        nonlocal avg_rewards, avg_components
         paths = []
         mean_rew = 0
+        mean_cert = mean_L = mean_E = mean_div = 0
+        X_paths, Y_paths = [], []
         for _ in range(n_traj):
             obs, acs, rewards, next_obs = [], [], [], []
+            r_certs, r_Ls, r_Es, r_divs = [], [], [], []
             X_path, Y_path = [], []
             X, actions = adversary.init_sampling()
             X_path.append(X)
@@ -264,25 +270,42 @@ def main():
                     next_obs.append(ob)
                     Y_adv = adv_model(X_new)
                     Y_adv = F.softmax(Y_adv, dim=1).cpu().numpy()
-                #reward = adversary.agent.calculate_reward(ob, actions, Y_adv)
-                reward = adversary.agent.calculate_reward(ob, 
+                reward, r_cert, r_L, r_E, r_div = adversary.agent.calculate_reward(ob, 
                                                           np.concatenate(acs), 
                                                           Y_adv)
                 rewards.append(reward)
+                r_certs.append(r_cert)
+                r_Ls.append(r_L)
+                r_Es.append(r_E)
+                r_divs.append(r_div)
+
             obs = np.concatenate(obs)
             acs = np.concatenate(acs)
+
             rewards = np.concatenate(rewards)
             mean_rew += np.mean(rewards)
+
+            mean_cert += np.mean(np.concatenate(r_certs))
+            mean_L += np.mean(np.concatenate(r_Ls))
+            mean_E += np.mean(np.array(r_Es))
+            mean_div += np.mean(np.array(r_divs))
+
             next_obs = np.concatenate(next_obs)
             path = {"observation":obs,
                     "action":acs,
                     "reward":rewards,
                     "next_observation":next_obs}
             paths.append(path)
+            X_paths.append(torch.cat(X_path))
+            Y_paths.append(torch.cat(Y_path))
         
         print(f"==> Avg reward: {mean_rew / n_traj}")
         avg_rewards.append(mean_rew / n_traj)
-        return torch.cat(X_path), torch.cat(Y_path), paths
+        avg_components["avg_cert"].append(mean_cert)
+        avg_components["avg_L"].append(mean_L)
+        avg_components["avg_E"].append(mean_E)
+        avg_components["avg_div"].append(mean_div)
+        return torch.cat(X_paths), torch.cat(Y_paths), paths
 
 
     traj_length = params['traj_length']
@@ -290,18 +313,20 @@ def main():
     n_iter = params['n_iter']
     X, Y = None, None
     budgets = params['budgets']
+    n_traj = params['n_traj_each_iter']
     criterion_train = model_utils.soft_cross_entropy
     if traj_length > 0:
-        n_iter = budgets // traj_length
+        n_iter = budgets // (traj_length*n_traj)
 
-    print(f"==> Budget = {n_iter} x {traj_length}")
+    print(f"==> Budget = {n_iter} x {traj_length} x {n_traj}")
     best_test_acc = []
     best_acc = -1
     avg_rewards = []
+    avg_components = collections.defaultdict(list)
     for iter in range(1, n_iter+1):
         # n_iter * traj_length = budget
         print(f"==> Iteration: {iter}/{n_iter}")
-        X_path, Y_path, paths = collect_training_trajectories(traj_length)
+        X_path, Y_path, paths = collect_training_trajectories(traj_length, n_traj=n_traj)
 
         adversary.add_to_replay_buffer(paths)
 
@@ -313,7 +338,7 @@ def main():
             X = torch.cat((X, X_path))
             Y = torch.cat((Y, Y_path))
 
-        transferset = ImageTensorSet((X, Y), transform=transform)
+        transferset = ImageTensorSet((X, Y))
 
         # ----------- Train
         #np.random.seed(cfg.DEFAULT_SEED)
@@ -328,8 +353,11 @@ def main():
         adversary.agent.actor.save(osp.join(model_dir, "checkpoint.agent.state_dict"))
 
         # ----------- Log
-        torch.save(best_acc, osp.join(model_dir, "best_acc.np"))
-        torch.save(avg_rewards, osp.join(model_dir, "avg_rewards.np"))
+        torch.save(best_test_acc, osp.join(model_dir, "best_acc.pylist"))
+        torch.save(avg_rewards, osp.join(model_dir, "avg_rewards.pylist"))
+        torch.save(avg_components, osp.join(model_dir, "avg_components.pydict"))
+        torch.save(adversary.idx_counter, osp.join(model_dir, "idx_counter.pydict"))
+        torch.save(transferset, osp.join(model_dir, "transferset.pt"))
 
 
     # Store arguments

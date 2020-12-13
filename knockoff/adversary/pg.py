@@ -6,6 +6,7 @@ import argparse
 import os.path as osp
 import os
 import random
+import collections
 
 import numpy as np
 
@@ -45,7 +46,8 @@ class PGAdversary(object):
 
         self.agent = PGAgent(agent_params)
 
-        self.idx_set = set()
+        self.idx_set = set(range(len(self.queryset)))
+        self.idx_counter = collections.defaultdict(int)
 
         self._restart()
 
@@ -68,10 +70,11 @@ class PGAdversary(object):
 
     def _sample_from_class(self, target):
         labels = np.array(self.queryset.targets)
-        idx = np.random.choice(range(labels.size), size=self.num_each_class, replace=False)
         # TODO: Optimize by caching
         target_idx = (labels==target).nonzero()[0]
         sample_idx = np.random.choice(target_idx, size=self.num_each_class, replace=False)
+        for i in sample_idx:
+            self.idx_counter[i] += 1
         subset = torch.utils.data.Subset(self.queryset, sample_idx)
         return torch.stack([subset[i][0] for i in range(len(subset))]) # [(img, label)]
 

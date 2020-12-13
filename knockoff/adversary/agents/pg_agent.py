@@ -30,7 +30,8 @@ class PGAgent(BaseAgent):
             self.agent_params['size'],
             discrete=self.agent_params['discrete'],
             learning_rate=self.agent_params['learning_rate'],
-            nn_baseline=self.agent_params['nn_baseline']
+            nn_baseline=self.agent_params['nn_baseline'],
+            eps_random=self.agent_params['eps_random']
         )
 
         # replay buffer
@@ -84,7 +85,7 @@ class PGAgent(BaseAgent):
         r_E = c_explore * (1 / len(self.visited_class))
 
         rewards = r_cert + r_L + r_E + r_div
-        return rewards
+        return rewards, r_cert, r_L, r_E, r_div
     #vector, trajectory
 
     def take_action(self, obs):

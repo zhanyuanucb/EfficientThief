@@ -1,5 +1,6 @@
 import abc
 import itertools
+import random
 from torch import nn
 from torch.nn import functional as F
 from torch import optim
@@ -26,6 +27,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                  learning_rate=1e-4,
                  training=True,
                  nn_baseline=False,
+                 eps_random=-1,
                  **kwargs
                  ):
         super().__init__(**kwargs)
@@ -39,6 +41,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         self.learning_rate = learning_rate
         self.training = training
         self.nn_baseline = nn_baseline
+        self.eps_random = eps_random
 
         if self.discrete:
             self.logits_na = ptu.build_mlp(input_size=self.ob_dim,
@@ -89,6 +92,12 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
 
     # query the policy with observation(s) to get selected action(s)
     def get_action(self, obs: np.ndarray) -> np.ndarray:
+        if random.random() < self.eps_random:
+            num_obs, _ = obs.shape
+            action = []
+            for _ in range(num_obs):
+                action.append(random.choice(range(self.ac_dim)))
+            return np.array(action)
         if len(obs.shape) > 1:
             observation = obs
         else:
