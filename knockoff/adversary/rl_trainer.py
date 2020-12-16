@@ -166,6 +166,16 @@ def main():
     parser.add_argument('--queryset', metavar='DS_NAME', type=str, help='Name of test')
     parser.add_argument('--victim_model_dir', default=None, type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
+
+    parser.add_argument('--n_layers', metavar='N', type=int, help='# layers in policy', default=4)
+    parser.add_argument('--size', metavar='N', type=int, help='size of layer in policy', default=64)
+    parser.add_argument('--policy_lr', type=float, default=1e-4, metavar='N', help='Policy learning rate')
+    parser.add_argument('--num_agent_train_steps_per_iter', metavar='N', type=int, help='num_agent_train_steps_per_iter', default=10)
+    parser.add_argument('--agent_train_batch_size', metavar='N', type=int, help='num_agent_train_steps_per_iter', default=990)
+    parser.add_argument('--policy_gamma', type=float, default=0.9, metavar='N', help='reward discounting')
+    parser.add_argument('--eps_random', type=float, default=-1, metavar='N', help='eps random exploration')
+    parser.add_argument('--nn_baseline', action='store_true', help='Use nn baseline', default=False)
+
     # Attacker's defense
     parser.add_argument('--argmaxed', action='store_true', help='Only consider argmax labels', default=False)
     parser.add_argument('--optimizer_choice', type=str, help='Optimizer', default='sgdm', choices=('sgd', 'sgdm', 'adam', 'adagrad'))
@@ -176,15 +186,12 @@ def main():
     if params['device_id'] >= 0:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(params['device_id'])
         device = torch.device('cuda')
+        ptu.init_gpu()
     else:
         device = torch.device('cpu')
 
-    ptu.init_gpu(gpu_id=params['device_id'])
-
     model_dir = params['model_dir']
-
-
-
+    
     # ----------- Set up testset
     dataset_name = params['testdataset']
     valid_datasets = datasets.__dict__.keys()
@@ -205,7 +212,11 @@ def main():
         raise ValueError('Dataset not found. Valid arguments = {}'.format(valid_datasets))
     modelfamily = datasets.dataset_to_modelfamily[queryset_name]
     transform = datasets.modelfamily_to_transforms[modelfamily]['train']
-    queryset = datasets.__dict__[queryset_name](train=True, transform=transform)
+    try:
+        queryset = datasets.__dict__[queryset_name](train=True, transform=transform)
+    except:
+        queryset = datasets.__dict__[queryset_name](split="train", transform=transform)
+
     num_classes = len(queryset.classes)
 
     # ----------- Initialize blackbox
@@ -223,17 +234,17 @@ def main():
     num_each_class = params['num_each_class']
     agent_params = {"ac_dim": num_classes,
                     "ob_dim": len(testset.classes),
-                    "n_layers": 4,
-                    "size": 64,
+                    "n_layers": params["n_layers"],
+                    "size": params["size"],
                     "discrete":True,
-                    "learning_rate":1e-4,
-                    "num_agent_train_steps_per_iter":10,
-                    "agent_train_batch_size":990,
-                    "gamma":0.9,
+                    "learning_rate":params["policy_lr"],
+                    "num_agent_train_steps_per_iter":params["num_agent_train_steps_per_iter"],
+                    "agent_train_batch_size":params["agent_train_batch_size"],
+                    "gamma":params["policy_gamma"],
                     "reward_to_go":True,
-                    "nn_baseline":False,
+                    "nn_baseline":params["nn_baseline"],
                     "standardize_advantages":True,
-                    "eps_random":-1
+                    "eps_random":params["eps_random"]
                     }
     adversary = PGAdversary(queryset, num_each_class, agent_params)
 
@@ -301,10 +312,10 @@ def main():
         
         print(f"==> Avg reward: {mean_rew / n_traj}")
         avg_rewards.append(mean_rew / n_traj)
-        avg_components["avg_cert"].append(mean_cert)
-        avg_components["avg_L"].append(mean_L)
-        avg_components["avg_E"].append(mean_E)
-        avg_components["avg_div"].append(mean_div)
+        avg_components["avg_cert"].append(mean_cert / n_traj)
+        avg_components["avg_L"].append(mean_L / n_traj)
+        avg_components["avg_E"].append(mean_E / n_traj)
+        avg_components["avg_div"].append(mean_div / n_traj)
         return torch.cat(X_paths), torch.cat(Y_paths), paths
 
 

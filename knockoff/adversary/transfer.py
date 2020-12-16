@@ -134,7 +134,10 @@ def main():
         raise ValueError('Dataset not found. Valid arguments = {}'.format(valid_datasets))
     modelfamily = datasets.dataset_to_modelfamily[queryset_name]
     transform = datasets.modelfamily_to_transforms[modelfamily]['test']
-    queryset = datasets.__dict__[queryset_name](train=True, transform=transform)
+    try:
+        queryset = datasets.__dict__[queryset_name](train=True, transform=transform)
+    except TypeError as e:
+        queryset = datasets.__dict__[queryset_name](split="train", transform=transform)
 
     # ----------- Initialize blackbox
     blackbox_dir = params['victim_model_dir']

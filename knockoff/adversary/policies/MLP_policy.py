@@ -11,9 +11,9 @@ from torch import distributions
 from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
 
-from cs285.infrastructure import pytorch_util as ptu
-from cs285.policies.base_policy import BasePolicy
-from cs285.infrastructure import utils
+from knockoff.adversary.policies.base_policy import BasePolicy
+from knockoff.adversary.infrastructure import utils
+from knockoff.adversary.infrastructure import pytorch_util as ptu
 
 
 class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
@@ -163,30 +163,30 @@ class MLPPolicyPG(MLPPolicy):
         loss.backward()
         self.optimizer.step()
 
-        #if self.nn_baseline:
-        #    ## TODO: normalize the q_values to have a mean of zero and a standard deviation of one
-        #    ## HINT: there is a `normalize` function in `infrastructure.utils`
-        #    q_values = ptu.from_numpy(q_values).to(ptu.device)
-        #    targets = utils.normalize(q_values, torch.mean(q_values), torch.std(q_values))
-        #    #targets = ptu.from_numpy(targets)
+        if self.nn_baseline:
+            ## TODO: normalize the q_values to have a mean of zero and a standard deviation of one
+            ## HINT: there is a `normalize` function in `infrastructure.utils`
+            q_values = ptu.from_numpy(q_values).to(ptu.device)
+            targets = utils.normalize(q_values, torch.mean(q_values), torch.std(q_values))
+            #targets = ptu.from_numpy(targets)
 
-        #    ## TODO: use the `forward` method of `self.baseline` to get baseline predictions
-        #    baseline_predictions = self.baseline.forward(observations).squeeze()
+            ## TODO: use the `forward` method of `self.baseline` to get baseline predictions
+            baseline_predictions = self.baseline.forward(observations).squeeze()
 
-        #    ## avoid any subtle broadcasting bugs that can arise when dealing with arrays of shape
-        #    ## [ N ] versus shape [ N x 1 ]
-        #    ## HINT: you can use `squeeze` on torch tensors to remove dimensions of size 1
-        #    assert baseline_predictions.shape == targets.shape
+            ## avoid any subtle broadcasting bugs that can arise when dealing with arrays of shape
+            ## [ N ] versus shape [ N x 1 ]
+            ## HINT: you can use `squeeze` on torch tensors to remove dimensions of size 1
+            assert baseline_predictions.shape == targets.shape
 
-        #    # TODO: compute the loss that should be optimized for training the baseline MLP (`self.baseline`)
-        #    # HINT: use `F.mse_loss`
-        #    baseline_loss = self.baseline_loss(baseline_predictions, targets)
+            # TODO: compute the loss that should be optimized for training the baseline MLP (`self.baseline`)
+            # HINT: use `F.mse_loss`
+            baseline_loss = self.baseline_loss(baseline_predictions, targets)
 
-        #    # TODO: optimize `baseline_loss` using `self.baseline_optimizer`
-        #    # HINT: remember to `zero_grad` first
-        #    self.baseline_optimizer.zero_grad()
-        #    baseline_loss.backward()
-        #    self.baseline_optimizer.step()
+            # TODO: optimize `baseline_loss` using `self.baseline_optimizer`
+            # HINT: remember to `zero_grad` first
+            self.baseline_optimizer.zero_grad()
+            baseline_loss.backward()
+            self.baseline_optimizer.step()
 
         #train_log = {
         #    'Training Loss': ptu.to_numpy(loss),

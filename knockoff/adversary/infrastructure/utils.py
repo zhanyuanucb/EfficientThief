@@ -195,3 +195,65 @@ def add_noise(data_inp, noiseToSignal=0.01):
             0, np.absolute(std_of_noise[j]), (data.shape[0],)))
 
     return data
+
+
+def collect_training_trajectories(adversary, blackbox, length, n_traj=10):
+    #nonlocal avg_rewards, avg_components
+    paths = []
+    X_paths, Y_paths = [], []
+    for _ in range(n_traj):
+        obs, acs, rewards, next_obs = [], [], [], []
+        r_certs, r_Ls, r_Es, r_divs = [], [], [], []
+        X_path, Y_path = [], []
+        X, actions = adversary.init_sampling()
+        X_path.append(X)
+        ob = blackbox(X)
+        Y_path.append(ob)
+        ob = ob.numpy()
+
+        for t in range(length-1):
+            with torch.no_grad():
+                # Observe and react
+                obs.append(ob)
+                X_new, actions = adversary.sample(ob)
+                X_path.append(X_new)
+                acs.append(actions)
+
+                # Env gives feedback, which is a new observation
+                X_new = X_new.to(device)
+                ob = blackbox(X_new)
+                Y_path.append(ob)
+                ob = ob.cpu().numpy()
+                next_obs.append(ob)
+                Y_adv = adv_model(X_new)
+                Y_adv = F.softmax(Y_adv, dim=1).cpu().numpy()
+            reward, r_cert, r_L, r_E, r_div = adversary.agent.calculate_reward(ob, 
+                                                      np.concatenate(acs), 
+                                                      Y_adv)
+            rewards.append(reward)
+            r_certs.append(r_cert)
+            r_Ls.append(r_L)
+            r_Es.append(r_E)
+            r_divs.append(r_div)
+
+        obs = np.concatenate(obs)
+        acs = np.concatenate(acs)
+
+        rewards = np.concatenate(rewards)
+        mean_rew += np.mean(rewards)
+
+        mean_cert += np.mean(np.concatenate(r_certs))
+        mean_L += np.mean(np.concatenate(r_Ls))
+        mean_E += np.mean(np.array(r_Es))
+        mean_div += np.mean(np.array(r_divs))
+
+        next_obs = np.concatenate(next_obs)
+        path = {"observation":obs,
+                "action":acs,
+                "reward":rewards,
+                "next_observation":next_obs}
+        paths.append(path)
+        X_paths.append(torch.cat(X_path))
+        Y_paths.append(torch.cat(Y_path))
+    
+    return torch.cat(X_paths), torch.cat(Y_paths), paths
